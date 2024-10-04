@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Linq;
 using System.Windows;
@@ -6,1049 +6,1063 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using GongSolutions.Wpf.DragDrop.Icons;
 using GongSolutions.Wpf.DragDrop.Utilities;
-using System.Windows.Media.Imaging;
 
 namespace GongSolutions.Wpf.DragDrop
 {
-  public static class DragDrop
-  {
-    public static readonly DataFormat DataFormat = DataFormats.GetDataFormat("GongSolutions.Wpf.DragDrop");
-
-    /// <summary>
-    /// The drag drop copy key state property (default None).
-    /// So the drag drop action is
-    /// - Move, within the same control or from one to another, if the drag drop key state is None
-    /// - Copy, from one to another control with the given drag drop copy key state
-    /// </summary>
-    public static readonly DependencyProperty DragDropCopyKeyStateProperty =
-      DependencyProperty.RegisterAttached("DragDropCopyKeyState", typeof(DragDropKeyStates), typeof(DragDrop), new PropertyMetadata(default(DragDropKeyStates)));
-
-    /// <summary>
-    /// Gets the drag drop copy key state indicating the effect of the drag drop operation.
-    /// </summary>
-    public static DragDropKeyStates GetDragDropCopyKeyState(UIElement target)
+    public static partial class DragDrop
     {
-      return (DragDropKeyStates)target.GetValue(DragDropCopyKeyStateProperty);
-    }
+        /// <summary>
+        /// Gets the drag handler from the drag info or from the sender, if the drag info is null
+        /// </summary>
+        /// <param name="dragInfo">the drag info object</param>
+        /// <param name="sender">the sender from an event, e.g. mouse down, mouse move</param>
+        /// <returns></returns>
+        private static IDragSource TryGetDragHandler(IDragInfo dragInfo, UIElement sender)
+        {
+            var dragHandler = (dragInfo?.VisualSource != null ? GetDragHandler(dragInfo.VisualSource) : null) ?? (sender != null ? GetDragHandler(sender) : null);
 
-    /// <summary>
-    /// Sets the drag drop copy key state indicating the effect of the drag drop operation.
-    /// </summary>
-    public static void SetDragDropCopyKeyState(UIElement target, DragDropKeyStates value)
-    {
-      target.SetValue(DragDropCopyKeyStateProperty, value);
-    }
-
-    public static readonly DependencyProperty DragAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("DragAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetDragAdornerTemplate(UIElement target)
-    {
-      return (DataTemplate)target.GetValue(DragAdornerTemplateProperty);
-    }
-
-    public static void SetDragAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(DragAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty DragAdornerTemplateSelectorProperty = DependencyProperty.RegisterAttached(
-      "DragAdornerTemplateSelector", typeof (DataTemplateSelector), typeof (DragDrop), new PropertyMetadata(default(DataTemplateSelector)));
-
-    public static void SetDragAdornerTemplateSelector(DependencyObject element, DataTemplateSelector value) 
-    {
-      element.SetValue(DragAdornerTemplateSelectorProperty, value);
-    }
-
-    public static DataTemplateSelector GetDragAdornerTemplateSelector(DependencyObject element) 
-    {
-      return (DataTemplateSelector) element.GetValue(DragAdornerTemplateSelectorProperty);
-    }
-
-    public static readonly DependencyProperty UseVisualSourceItemSizeForDragAdornerProperty =
-      DependencyProperty.RegisterAttached("UseVisualSourceItemSizeForDragAdorner", typeof(bool), typeof(DragDrop), new PropertyMetadata(false));
-
-    public static bool GetUseVisualSourceItemSizeForDragAdorner(UIElement target)
-    {
-      return (bool)target.GetValue(UseVisualSourceItemSizeForDragAdornerProperty);
-    }
-
-    public static void SetUseVisualSourceItemSizeForDragAdorner(UIElement target, bool value)
-    {
-      target.SetValue(UseVisualSourceItemSizeForDragAdornerProperty, value);
-    }
-
-    public static readonly DependencyProperty UseDefaultDragAdornerProperty =
-      DependencyProperty.RegisterAttached("UseDefaultDragAdorner", typeof(bool), typeof(DragDrop), new PropertyMetadata(false));
-
-    public static bool GetUseDefaultDragAdorner(UIElement target)
-    {
-      return (bool)target.GetValue(UseDefaultDragAdornerProperty);
-    }
-
-    public static void SetUseDefaultDragAdorner(UIElement target, bool value)
-    {
-      target.SetValue(UseDefaultDragAdornerProperty, value);
-    }
-
-    public static readonly DependencyProperty DefaultDragAdornerOpacityProperty =
-      DependencyProperty.RegisterAttached("DefaultDragAdornerOpacity", typeof(double), typeof(DragDrop), new PropertyMetadata(0.8));
-
-    public static double GetDefaultDragAdornerOpacity(UIElement target)
-    {
-      return (double)target.GetValue(DefaultDragAdornerOpacityProperty);
-    }
-
-    public static void SetDefaultDragAdornerOpacity(UIElement target, double value)
-    {
-      target.SetValue(DefaultDragAdornerOpacityProperty, value);
-    }
-
-    public static readonly DependencyProperty UseDefaultEffectDataTemplateProperty =
-      DependencyProperty.RegisterAttached("UseDefaultEffectDataTemplate", typeof(bool), typeof(DragDrop), new PropertyMetadata(false));
-
-    public static bool GetUseDefaultEffectDataTemplate(UIElement target)
-    {
-      return (bool)target.GetValue(UseDefaultEffectDataTemplateProperty);
-    }
-
-    public static void SetUseDefaultEffectDataTemplate(UIElement target, bool value)
-    {
-      target.SetValue(UseDefaultEffectDataTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty EffectNoneAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("EffectNoneAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetEffectNoneAdornerTemplate(UIElement target)
-    {
-      var template = (DataTemplate)target.GetValue(EffectNoneAdornerTemplateProperty);
-
-      if (template == null) {
-        if (!GetUseDefaultEffectDataTemplate(target)) {
-          return null;
+            return dragHandler ?? DefaultDragHandler;
         }
 
-        var imageSourceFactory = new FrameworkElementFactory(typeof(Image));
-        imageSourceFactory.SetValue(Image.SourceProperty, IconFactory.EffectNone);
-        imageSourceFactory.SetValue(FrameworkElement.HeightProperty, 12.0);
-        imageSourceFactory.SetValue(FrameworkElement.WidthProperty, 12.0);
+        /// <summary>
+        /// Gets the drop handler from the drop info or from the sender, if the drop info is null
+        /// </summary>
+        /// <param name="dropInfo">the drop info object</param>
+        /// <param name="sender">the sender from an event, e.g. drag over</param>
+        /// <returns></returns>
+        private static IDropTarget TryGetDropHandler(IDropInfo dropInfo, UIElement sender)
+        {
+            var dropHandler = (dropInfo?.VisualTarget != null ? GetDropHandler(dropInfo.VisualTarget) : null) ?? (sender != null ? GetDropHandler(sender) : null);
 
-        template = new DataTemplate();
-        template.VisualTree = imageSourceFactory;
-      }
-
-      return template;
-    }
-
-    public static void SetEffectNoneAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(EffectNoneAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty EffectCopyAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("EffectCopyAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetEffectCopyAdornerTemplate(UIElement target, string destinationText)
-    {
-      var template = (DataTemplate)target.GetValue(EffectCopyAdornerTemplateProperty);
-
-      if (template == null) {
-        template = CreateDefaultEffectDataTemplate(target, IconFactory.EffectCopy, "Copy to", destinationText);
-      }
-
-      return template;
-    }
-
-    public static void SetEffectCopyAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(EffectCopyAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty EffectMoveAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("EffectMoveAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetEffectMoveAdornerTemplate(UIElement target, string destinationText)
-    {
-      var template = (DataTemplate)target.GetValue(EffectMoveAdornerTemplateProperty);
-
-      if (template == null) {
-        template = CreateDefaultEffectDataTemplate(target, IconFactory.EffectMove, "Move to", destinationText);
-      }
-
-      return template;
-    }
-
-    public static void SetEffectMoveAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(EffectMoveAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty EffectLinkAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("EffectLinkAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetEffectLinkAdornerTemplate(UIElement target, string destinationText)
-    {
-      var template = (DataTemplate)target.GetValue(EffectLinkAdornerTemplateProperty);
-
-      if (template == null) {
-        template = CreateDefaultEffectDataTemplate(target, IconFactory.EffectLink, "Link to", destinationText);
-      }
-
-      return template;
-    }
-
-    public static void SetEffectLinkAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(EffectLinkAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty EffectAllAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("EffectAllAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetEffectAllAdornerTemplate(UIElement target)
-    {
-      var template = (DataTemplate)target.GetValue(EffectAllAdornerTemplateProperty);
-
-      // TODO: Add default template
-
-      return template;
-    }
-
-    public static void SetEffectAllAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(EffectAllAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty EffectScrollAdornerTemplateProperty =
-      DependencyProperty.RegisterAttached("EffectScrollAdornerTemplate", typeof(DataTemplate), typeof(DragDrop));
-
-    public static DataTemplate GetEffectScrollAdornerTemplate(UIElement target)
-    {
-      var template = (DataTemplate)target.GetValue(EffectScrollAdornerTemplateProperty);
-
-      // TODO: Add default template
-
-      return template;
-    }
-
-    public static void SetEffectScrollAdornerTemplate(UIElement target, DataTemplate value)
-    {
-      target.SetValue(EffectScrollAdornerTemplateProperty, value);
-    }
-
-    public static readonly DependencyProperty IsDragSourceProperty =
-      DependencyProperty.RegisterAttached("IsDragSource", typeof(bool), typeof(DragDrop), new UIPropertyMetadata(false, IsDragSourceChanged));
-
-    public static bool GetIsDragSource(UIElement target)
-    {
-      return (bool)target.GetValue(IsDragSourceProperty);
-    }
-
-    public static void SetIsDragSource(UIElement target, bool value)
-    {
-      target.SetValue(IsDragSourceProperty, value);
-    }
-
-    public static readonly DependencyProperty IsDropTargetProperty =
-      DependencyProperty.RegisterAttached("IsDropTarget", typeof(bool), typeof(DragDrop), new UIPropertyMetadata(false, IsDropTargetChanged));
-
-    public static bool GetIsDropTarget(UIElement target)
-    {
-      return (bool)target.GetValue(IsDropTargetProperty);
-    }
-
-    public static void SetIsDropTarget(UIElement target, bool value)
-    {
-      target.SetValue(IsDropTargetProperty, value);
-    }
-
-    public static readonly DependencyProperty DragDropContextProperty = 
-        DependencyProperty.RegisterAttached("DragDropContext", typeof(string), typeof(DragDrop), new UIPropertyMetadata(string.Empty));
-
-    public static string GetDragDropContext(UIElement target)
-    {
-        return (string)target.GetValue(DragDropContextProperty);
-    }
-
-    public static void SetDragDropContext(UIElement target, string value)
-    {
-        target.SetValue(DragDropContextProperty, value);
-    }
-
-    public static readonly DependencyProperty DragHandlerProperty =
-      DependencyProperty.RegisterAttached("DragHandler", typeof(IDragSource), typeof(DragDrop));
-
-    public static IDragSource GetDragHandler(UIElement target)
-    {
-      return (IDragSource)target.GetValue(DragHandlerProperty);
-    }
-
-    public static void SetDragHandler(UIElement target, IDragSource value)
-    {
-      target.SetValue(DragHandlerProperty, value);
-    }
-
-    public static readonly DependencyProperty DropHandlerProperty =
-      DependencyProperty.RegisterAttached("DropHandler", typeof(IDropTarget), typeof(DragDrop));
-
-    public static IDropTarget GetDropHandler(UIElement target)
-    {
-      return (IDropTarget)target.GetValue(DropHandlerProperty);
-    }
-
-    public static void SetDropHandler(UIElement target, IDropTarget value)
-    {
-      target.SetValue(DropHandlerProperty, value);
-    }
-
-    public static readonly DependencyProperty DragSourceIgnoreProperty =
-      DependencyProperty.RegisterAttached("DragSourceIgnore", typeof(bool), typeof(DragDrop), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.Inherits));
-
-    public static bool GetDragSourceIgnore(UIElement source)
-    {
-      return (bool)source.GetValue(DragSourceIgnoreProperty);
-    }
-
-    public static void SetDragSourceIgnore(UIElement source, bool value)
-    {
-      source.SetValue(DragSourceIgnoreProperty, value);
-    }
-
-    public static readonly DependencyProperty DragDirectlySelectedOnlyProperty =
-      DependencyProperty.RegisterAttached("DragDirectlySelectedOnly", typeof(bool), typeof(DragDrop), new PropertyMetadata(false));
-      
-    public static bool GetDragDirectlySelectedOnly(DependencyObject obj)
-    {
-      return (bool)obj.GetValue(DragDirectlySelectedOnlyProperty);
-    }
-
-    public static void SetDragDirectlySelectedOnly(DependencyObject obj, bool value)
-    {
-      obj.SetValue(DragDirectlySelectedOnlyProperty, value);
-    }
-
-    /// <summary>
-    /// DragMouseAnchorPoint defines the horizontal and vertical proportion at which the pointer will anchor on the DragAdorner.
-    /// </summary>
-    public static readonly DependencyProperty DragMouseAnchorPointProperty =
-      DependencyProperty.RegisterAttached("DragMouseAnchorPoint", typeof(Point), typeof(DragDrop), new PropertyMetadata(new Point(0, 1)));
-
-    public static Point GetDragMouseAnchorPoint(UIElement target)
-    {
-      return (Point)target.GetValue(DragMouseAnchorPointProperty);
-    }
-
-    public static void SetDragMouseAnchorPoint(UIElement target, Point value)
-    {
-      target.SetValue(DragMouseAnchorPointProperty, value);
-    }
-
-    public static readonly DependencyProperty ItemsPanelOrientationProperty =
-      DependencyProperty.RegisterAttached("ItemsPanelOrientation", typeof(Orientation?), typeof(DragDrop), new PropertyMetadata(null));
-
-    /// <summary>
-    /// Gets the Orientation which should be used for the drag drop action (default null).
-    /// Normally it will be look up to find the correct orientaion of the inner ItemsPanel,
-    /// but sometimes it's necessary to force the oreintation, if the look up is wrong.
-    /// </summary>
-    public static Orientation? GetItemsPanelOrientation(UIElement source)
-    {
-        return (Orientation?)source.GetValue(ItemsPanelOrientationProperty);
-    }
-
-    /// <summary>
-    /// Sets the Orientation which should be used for the drag drop action (default null). Normally it will be look up to find the correct orientaion of the inner ItemsPanel,
-    /// but sometimes it's necessary to force the oreintation, if the look up is wrong.
-    /// </summary>
-    public static void SetItemsPanelOrientation(UIElement source, Orientation? value)
-    {
-        source.SetValue(ItemsPanelOrientationProperty, value);
-    }
-
-public static IDragSource DefaultDragHandler
-    {
-      get
-      {
-        if (m_DefaultDragHandler == null) {
-          m_DefaultDragHandler = new DefaultDragHandler();
+            return dropHandler ?? DefaultDropHandler;
         }
 
-        return m_DefaultDragHandler;
-      }
-      set { m_DefaultDragHandler = value; }
-    }
-
-    public static IDropTarget DefaultDropHandler
-    {
-      get
-      {
-        if (m_DefaultDropHandler == null) {
-          m_DefaultDropHandler = new DefaultDropHandler();
+        /// <summary>
+        /// Gets the drag info builder from the sender.
+        /// </summary>
+        /// <param name="sender">the sender from an event, e.g. drag over</param>
+        /// <returns></returns>
+        private static IDragInfoBuilder TryGetDragInfoBuilder(DependencyObject sender)
+        {
+            return sender != null ? GetDragInfoBuilder(sender) : null;
         }
 
-        return m_DefaultDropHandler;
-      }
-      set { m_DefaultDropHandler = value; }
-    }
-
-    private static void IsDragSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-      var uiElement = (UIElement)d;
-
-      if ((bool)e.NewValue == true) {
-        uiElement.PreviewMouseLeftButtonDown += DragSource_PreviewMouseLeftButtonDown;
-        uiElement.PreviewMouseLeftButtonUp += DragSource_PreviewMouseLeftButtonUp;
-        uiElement.PreviewMouseMove += DragSource_PreviewMouseMove;
-        uiElement.QueryContinueDrag += DragSource_QueryContinueDrag;
-      } else {
-        uiElement.PreviewMouseLeftButtonDown -= DragSource_PreviewMouseLeftButtonDown;
-        uiElement.PreviewMouseLeftButtonUp -= DragSource_PreviewMouseLeftButtonUp;
-        uiElement.PreviewMouseMove -= DragSource_PreviewMouseMove;
-        uiElement.QueryContinueDrag -= DragSource_QueryContinueDrag;
-      }
-    }
-
-    private static void IsDropTargetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-      var uiElement = (UIElement)d;
-
-      if ((bool)e.NewValue == true) {
-        uiElement.AllowDrop = true;
-
-        if (uiElement is ItemsControl) {
-          // use normal events for ItemsControls
-          uiElement.DragEnter += DropTarget_PreviewDragEnter;
-          uiElement.DragLeave += DropTarget_PreviewDragLeave;
-          uiElement.DragOver += DropTarget_PreviewDragOver;
-          uiElement.Drop += DropTarget_PreviewDrop;
-          uiElement.GiveFeedback += DropTarget_GiveFeedback;
-        } else {
-          // issue #85: try using preview events for all other elements than ItemsControls
-          uiElement.PreviewDragEnter += DropTarget_PreviewDragEnter;
-          uiElement.PreviewDragLeave += DropTarget_PreviewDragLeave;
-          uiElement.PreviewDragOver += DropTarget_PreviewDragOver;
-          uiElement.PreviewDrop += DropTarget_PreviewDrop;
-          uiElement.PreviewGiveFeedback += DropTarget_GiveFeedback;
-        }
-      } else {
-        uiElement.AllowDrop = false;
-
-        if (uiElement is ItemsControl) {
-          uiElement.DragEnter -= DropTarget_PreviewDragEnter;
-          uiElement.DragLeave -= DropTarget_PreviewDragLeave;
-          uiElement.DragOver -= DropTarget_PreviewDragOver;
-          uiElement.Drop -= DropTarget_PreviewDrop;
-          uiElement.GiveFeedback -= DropTarget_GiveFeedback;
-        } else {
-          uiElement.PreviewDragEnter -= DropTarget_PreviewDragEnter;
-          uiElement.PreviewDragLeave -= DropTarget_PreviewDragLeave;
-          uiElement.PreviewDragOver -= DropTarget_PreviewDragOver;
-          uiElement.PreviewDrop -= DropTarget_PreviewDrop;
-          uiElement.PreviewGiveFeedback -= DropTarget_GiveFeedback;
+        /// <summary>
+        /// Gets the drop info builder from the sender.
+        /// </summary>
+        /// <param name="sender">the sender from an event, e.g. drag over</param>
+        /// <returns></returns>
+        private static IDropInfoBuilder TryGetDropInfoBuilder(DependencyObject sender)
+        {
+            return sender != null ? GetDropInfoBuilder(sender) : null;
         }
 
-        Mouse.OverrideCursor = null;
-      }
-    }
+        /// <summary>
+        /// Gets the RootElementFinder from the sender or uses the default implementation, if it's null.
+        /// </summary>
+        /// <param name="sender">the sender from an event, e.g. drag over</param>
+        /// <returns></returns>
+        private static IRootElementFinder TryGetRootElementFinder(UIElement sender)
+        {
+            var rootElementFinder = sender != null ? GetRootElementFinder(sender) : null;
 
-    private static void CreateDragAdorner(DropInfo dropInfo)
-    {
-      var template = GetDragAdornerTemplate(m_DragInfo.VisualSource);
-      var templateSelector = GetDragAdornerTemplateSelector(m_DragInfo.VisualSource);
-
-      UIElement adornment = null;
-
-      var useDefaultDragAdorner = GetUseDefaultDragAdorner(m_DragInfo.VisualSource);
-      var useVisualSourceItemSizeForDragAdorner = GetUseVisualSourceItemSizeForDragAdorner(m_DragInfo.VisualSource);
-
-      if (template == null && templateSelector == null && useDefaultDragAdorner) {
-        var bs = CaptureScreen(m_DragInfo.VisualSourceItem, m_DragInfo.VisualSourceFlowDirection);
-        if (bs != null) {
-          var factory = new FrameworkElementFactory(typeof(Image));
-          factory.SetValue(Image.SourceProperty, bs);
-          factory.SetValue(RenderOptions.EdgeModeProperty, EdgeMode.Aliased);
-          factory.SetValue(RenderOptions.BitmapScalingModeProperty, BitmapScalingMode.HighQuality);
-          factory.SetValue(FrameworkElement.WidthProperty, bs.Width);
-          factory.SetValue(FrameworkElement.HeightProperty, bs.Height);
-          factory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
-          factory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
-          template = new DataTemplate { VisualTree = factory };
+            return rootElementFinder ?? DefaultRootElementFinder;
         }
-      }
 
-      if (template != null || templateSelector != null) {
-        if (m_DragInfo.Data is IEnumerable && !(m_DragInfo.Data is string)) {
-          if (!useDefaultDragAdorner && ((IEnumerable)m_DragInfo.Data).Cast<object>().Count() <= 10) {
-            var itemsControl = new ItemsControl();
-            itemsControl.ItemsSource = (IEnumerable)m_DragInfo.Data;
-            itemsControl.ItemTemplate = template;
-            itemsControl.ItemTemplateSelector = templateSelector;
-
-            if (useVisualSourceItemSizeForDragAdorner)
+        internal static DataTemplate TryGetDragAdornerTemplate(UIElement source, UIElement sender)
+        {
+            var template = source is not null ? GetDragAdornerTemplate(source) : null;
+            if (template is null && sender is not null)
             {
-              var bounds = VisualTreeHelper.GetDescendantBounds(m_DragInfo.VisualSourceItem);
-              itemsControl.SetValue(FrameworkElement.MinWidthProperty, bounds.Width);
+                template = GetDragAdornerTemplate(sender);
             }
 
-            // The ItemsControl doesn't display unless we create a grid to contain it.
-            // Not quite sure why we need this...
-            var grid = new Grid();
-            grid.Children.Add(itemsControl);
-            adornment = grid;
-          }
-        } else {
-          var contentPresenter = new ContentPresenter();
-          contentPresenter.Content = m_DragInfo.Data;
-          contentPresenter.ContentTemplate = template;
-          contentPresenter.ContentTemplateSelector = templateSelector;
-
-          if (useVisualSourceItemSizeForDragAdorner)
-          {
-            var bounds = VisualTreeHelper.GetDescendantBounds(m_DragInfo.VisualSourceItem);
-            contentPresenter.SetValue(FrameworkElement.MinWidthProperty, bounds.Width);
-            contentPresenter.SetValue(FrameworkElement.MinHeightProperty, bounds.Height);
-          }
-
-          adornment = contentPresenter;
-        }
-      }
-
-      if (adornment != null) {
-        if (useDefaultDragAdorner) {
-          adornment.Opacity = GetDefaultDragAdornerOpacity(m_DragInfo.VisualSource);
+            return template;
         }
 
-        var rootElement = RootElementFinder.FindRoot(dropInfo.VisualTarget ?? m_DragInfo.VisualSource);
-        DragAdorner = new DragAdorner(rootElement, adornment);
-      }
-    }
-
-    // Helper to generate the image - I grabbed this off Google 
-    // somewhere. -- Chris Bordeman cbordeman@gmail.com
-    private static BitmapSource CaptureScreen(Visual target, FlowDirection flowDirection)
-    {
-      if (target == null) {
-        return null;
-      }
-
-      var dpiX = DpiHelper.DpiX;
-      var dpiY = DpiHelper.DpiY;
-
-      var bounds = VisualTreeHelper.GetDescendantBounds(target);
-      var dpiBounds = DpiHelper.LogicalRectToDevice(bounds);
-
-      var rtb = new RenderTargetBitmap((int)Math.Ceiling(dpiBounds.Width),
-                                       (int)Math.Ceiling(dpiBounds.Height),
-                                       dpiX,
-                                       dpiY,
-                                       PixelFormats.Pbgra32);
-
-      var dv = new DrawingVisual();
-      using (var ctx = dv.RenderOpen()) {
-        var vb = new VisualBrush(target);
-        if (flowDirection == FlowDirection.RightToLeft) {
-          var transformGroup = new TransformGroup();
-          transformGroup.Children.Add(new ScaleTransform(-1, 1));
-          transformGroup.Children.Add(new TranslateTransform(bounds.Size.Width - 1, 0));
-          ctx.PushTransform(transformGroup);
-        }
-        ctx.DrawRectangle(vb, null, new Rect(new Point(), bounds.Size));
-      }
-
-      rtb.Render(dv);
-      
-      return rtb;
-    }
-
-    private static void CreateEffectAdorner(DropInfo dropInfo)
-    {
-      var template = GetEffectAdornerTemplate(m_DragInfo.VisualSource, dropInfo.Effects, dropInfo.DestinationText);
-
-      if (template != null) {
-        var rootElement = RootElementFinder.FindRoot(dropInfo.VisualTarget ?? m_DragInfo.VisualSource);
-
-        var adornment = new ContentPresenter();
-        adornment.Content = m_DragInfo.Data;
-        adornment.ContentTemplate = template;
-
-        EffectAdorner = new DragAdorner(rootElement, adornment, dropInfo.Effects);
-      }
-    }
-
-    private static DataTemplate CreateDefaultEffectDataTemplate(UIElement target, BitmapImage effectIcon, string effectText, string destinationText)
-    {
-      if (!GetUseDefaultEffectDataTemplate(target)) {
-        return null;
-      }
-
-      // Add icon
-      var imageFactory = new FrameworkElementFactory(typeof(Image));
-      imageFactory.SetValue(Image.SourceProperty, effectIcon);
-      imageFactory.SetValue(FrameworkElement.HeightProperty, 12.0);
-      imageFactory.SetValue(FrameworkElement.WidthProperty, 12.0);
-      imageFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0.0, 0.0, 3.0, 0.0));
-
-      // Add effect text
-      var effectTextBlockFactory = new FrameworkElementFactory(typeof(TextBlock));
-      effectTextBlockFactory.SetValue(TextBlock.TextProperty, effectText);
-      effectTextBlockFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
-      effectTextBlockFactory.SetValue(TextBlock.ForegroundProperty, Brushes.Blue);
-
-      // Add destination text
-      var destinationTextBlockFactory = new FrameworkElementFactory(typeof(TextBlock));
-      destinationTextBlockFactory.SetValue(TextBlock.TextProperty, destinationText);
-      destinationTextBlockFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
-      destinationTextBlockFactory.SetValue(TextBlock.ForegroundProperty, Brushes.DarkBlue);
-      destinationTextBlockFactory.SetValue(TextBlock.MarginProperty, new Thickness(3, 0, 0, 0));
-      destinationTextBlockFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.DemiBold);
-
-      // Create containing panel
-      var stackPanelFactory = new FrameworkElementFactory(typeof(StackPanel));
-      stackPanelFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-      stackPanelFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2.0));
-      stackPanelFactory.AppendChild(imageFactory);
-      stackPanelFactory.AppendChild(effectTextBlockFactory);
-      stackPanelFactory.AppendChild(destinationTextBlockFactory);
-
-      // Add border
-      var borderFactory = new FrameworkElementFactory(typeof(Border));
-      var stopCollection = new GradientStopCollection {
-                                                        new GradientStop(Colors.White, 0.0),
-                                                        new GradientStop(Colors.AliceBlue, 1.0)
-                                                      };
-      var gradientBrush = new LinearGradientBrush(stopCollection) {
-                                                                    StartPoint = new Point(0, 0),
-                                                                    EndPoint = new Point(0, 1)
-                                                                  };
-      borderFactory.SetValue(Panel.BackgroundProperty, gradientBrush);
-      borderFactory.SetValue(Border.BorderBrushProperty, Brushes.DimGray);
-      borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(3.0));
-      borderFactory.SetValue(Border.BorderThicknessProperty, new Thickness(1.0));
-      borderFactory.AppendChild(stackPanelFactory);
-
-      // Finally add content to template
-      var template = new DataTemplate();
-      template.VisualTree = borderFactory;
-      return template;
-    }
-
-    private static DataTemplate GetEffectAdornerTemplate(UIElement target, DragDropEffects effect, string destinationText)
-    {
-      switch (effect) {
-        case DragDropEffects.All:
-          return null;
-        case DragDropEffects.Copy:
-          return GetEffectCopyAdornerTemplate(target, destinationText);
-        case DragDropEffects.Link:
-          return GetEffectLinkAdornerTemplate(target, destinationText);
-        case DragDropEffects.Move:
-          return GetEffectMoveAdornerTemplate(target, destinationText);
-        case DragDropEffects.None:
-          return GetEffectNoneAdornerTemplate(target);
-        case DragDropEffects.Scroll:
-          return null;
-        default:
-          return null;
-      }
-    }
-
-    private static void Scroll(ScrollViewer scrollViewer, DragEventArgs e)
-    {
-      if (scrollViewer != null) {
-        var position = e.GetPosition(scrollViewer);
-        var scrollMargin = Math.Min(scrollViewer.FontSize * 2, scrollViewer.ActualHeight / 2);
-
-        if (position.X >= scrollViewer.ActualWidth - scrollMargin &&
-            scrollViewer.HorizontalOffset < scrollViewer.ExtentWidth - scrollViewer.ViewportWidth) {
-          scrollViewer.LineRight();
-        } else if (position.X < scrollMargin && scrollViewer.HorizontalOffset > 0) {
-          scrollViewer.LineLeft();
-        } else if (position.Y >= scrollViewer.ActualHeight - scrollMargin &&
-                   scrollViewer.VerticalOffset < scrollViewer.ExtentHeight - scrollViewer.ViewportHeight) {
-          scrollViewer.LineDown();
-        } else if (position.Y < scrollMargin && scrollViewer.VerticalOffset > 0) {
-          scrollViewer.LineUp();
-        }
-      }
-    }
-
-    /// <summary>
-    /// Gets the drag handler from the drag info or from the sender, if the drag info is null
-    /// </summary>
-    /// <param name="dragInfo">the drag info object</param>
-    /// <param name="sender">the sender from an event, e.g. mouse down, mouse move</param>
-    /// <returns></returns>
-    private static IDragSource TryGetDragHandler(DragInfo dragInfo, UIElement sender)
-    {
-      IDragSource dragHandler = null;
-      if (dragInfo != null && dragInfo.VisualSource != null)
-      {
-        dragHandler = GetDragHandler(dragInfo.VisualSource);
-      }
-      if (dragHandler == null && sender != null)
-      {
-        dragHandler = GetDragHandler(sender);
-      }
-      return dragHandler ?? DefaultDragHandler;
-    }
-
-    /// <summary>
-    /// Gets the drop handler from the drop info or from the sender, if the drop info is null
-    /// </summary>
-    /// <param name="dropInfo">the drop info object</param>
-    /// <param name="sender">the sender from an event, e.g. drag over</param>
-    /// <returns></returns>
-    private static IDropTarget TryGetDropHandler(DropInfo dropInfo, UIElement sender)
-    {
-      IDropTarget dropHandler = null;
-      if (dropInfo != null && dropInfo.VisualTarget != null)
-      {
-        dropHandler = GetDropHandler(dropInfo.VisualTarget);
-      }
-      if (dropHandler == null && sender != null)
-      {
-        dropHandler = GetDropHandler(sender);
-      }
-      return dropHandler ?? DefaultDropHandler;
-    }
-
-    private static void DragSource_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-      // Ignore the click if clickCount != 1 or the user has clicked on a scrollbar.
-      var elementPosition = e.GetPosition((IInputElement)sender);
-      if (e.ClickCount != 1
-          || (sender as UIElement).IsDragSourceIgnored()
-          || (e.Source as UIElement).IsDragSourceIgnored()
-          || (e.OriginalSource as UIElement).IsDragSourceIgnored()
-          || (sender is TabControl) && !HitTestUtilities.HitTest4Type<TabPanel>(sender, elementPosition)
-          || HitTestUtilities.HitTest4Type<RangeBase>(sender, elementPosition)
-          || HitTestUtilities.HitTest4Type<ButtonBase>(sender, elementPosition)
-          || HitTestUtilities.HitTest4Type<TextBoxBase>(sender, elementPosition)
-          || HitTestUtilities.HitTest4Type<PasswordBox>(sender, elementPosition)
-          || HitTestUtilities.HitTest4Type<ComboBox>(sender, elementPosition)
-          || HitTestUtilities.HitTest4GridViewColumnHeader(sender, elementPosition)
-          || HitTestUtilities.HitTest4DataGridTypes(sender, elementPosition)
-          || HitTestUtilities.IsNotPartOfSender(sender, e)) {
-        m_DragInfo = null;
-        return;
-      }
-
-      m_DragInfo = new DragInfo(sender, e);
-
-      if (m_DragInfo.VisualSourceItem == null)
-      {
-        m_DragInfo = null;
-        return;
-      }
-
-      var dragHandler = TryGetDragHandler(m_DragInfo, sender as UIElement);
-      if (!dragHandler.CanStartDrag(m_DragInfo)) {
-        m_DragInfo = null;
-        return;
-      }
-
-      // If the sender is a list box that allows multiple selections, ensure that clicking on an 
-      // already selected item does not change the selection, otherwise dragging multiple items 
-      // is made impossible.
-      var itemsControl = sender as ItemsControl;
-      if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0 && (Keyboard.Modifiers & ModifierKeys.Control) == 0 && m_DragInfo.VisualSourceItem != null && itemsControl != null && itemsControl.CanSelectMultipleItems()) {
-        var selectedItems = itemsControl.GetSelectedItems().OfType<object>().ToList();
-        if (selectedItems.Count > 1 && selectedItems.Contains(m_DragInfo.SourceItem)) {
-          m_ClickSupressItem = m_DragInfo.SourceItem;
-          e.Handled = true;
-        }
-      }
-    }
-
-    private static void DragSource_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-      var elementPosition = e.GetPosition((IInputElement)sender);
-      if ((sender is TabControl) && !HitTestUtilities.HitTest4Type<TabPanel>(sender, elementPosition)) {
-        m_DragInfo = null;
-        m_ClickSupressItem = null;
-        return;
-      }
-
-      // If we prevented the control's default selection handling in DragSource_PreviewMouseLeftButtonDown
-      // by setting 'e.Handled = true' and a drag was not initiated, manually set the selection here.
-      var itemsControl = sender as ItemsControl;
-      if (itemsControl != null && m_DragInfo != null && m_ClickSupressItem != null && m_ClickSupressItem == m_DragInfo.SourceItem) {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) {
-          itemsControl.SetItemSelected(m_DragInfo.SourceItem, false);
-        } else if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0) {
-          itemsControl.SetSelectedItem(m_DragInfo.SourceItem);
-        }
-      }
-
-      m_DragInfo = null;
-      m_ClickSupressItem = null;
-    }
-
-    private static void DragSource_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-      if (m_DragInfo != null && !m_DragInProgress) {
-
-        // do nothing if mouse left button is released
-        if (e.LeftButton == MouseButtonState.Released)
+        internal static DataTemplateSelector TryGetDragAdornerTemplateSelector(UIElement source, UIElement sender)
         {
-          m_DragInfo = null;
-          return;
-        } 
+            var templateSelector = source is not null ? GetDragAdornerTemplateSelector(source) : null;
+            if (templateSelector is null && sender is not null)
+            {
+                templateSelector = GetDragAdornerTemplateSelector(sender);
+            }
 
-        var dragStart = m_DragInfo.DragStartPosition;
-        var position = e.GetPosition((IInputElement)sender);
+            return templateSelector;
+        }
 
-        if (Math.Abs(position.X - dragStart.X) > SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs(position.Y - dragStart.Y) > SystemParameters.MinimumVerticalDragDistance) {
-          var dragHandler = TryGetDragHandler(m_DragInfo, sender as UIElement);
-          if (dragHandler.CanStartDrag(m_DragInfo)) {
-            dragHandler.StartDrag(m_DragInfo);
+        internal static DataTemplate TryGetDragAdornerMultiItemTemplate(UIElement source, UIElement sender)
+        {
+            var template = source is not null ? GetDragAdornerMultiItemTemplate(source) : null;
+            if (template is null && sender is not null)
+            {
+                template = GetDragAdornerMultiItemTemplate(sender);
+            }
 
-            if (m_DragInfo.Effects != DragDropEffects.None && m_DragInfo.Data != null) {
-              var data = m_DragInfo.DataObject;
+            return template;
+        }
 
-              if (data == null) {
-                data = new DataObject(DataFormat.Name, m_DragInfo.Data);
-              } else {
-                data.SetData(DataFormat.Name, m_DragInfo.Data);
-              }
+        internal static DataTemplateSelector TryGetDragAdornerMultiItemTemplateSelector(UIElement source, UIElement sender)
+        {
+            var templateSelector = source is not null ? GetDragAdornerMultiItemTemplateSelector(source) : null;
+            if (templateSelector is null && sender is not null)
+            {
+                templateSelector = GetDragAdornerMultiItemTemplateSelector(sender);
+            }
 
-              try {
-                m_DragInProgress = true;
-                var result = System.Windows.DragDrop.DoDragDrop(m_DragInfo.VisualSource, data, m_DragInfo.Effects);
-                if (result == DragDropEffects.None)
-                  dragHandler.DragCancelled();
-              }
-              catch (Exception ex) {
-                if (!dragHandler.TryCatchOccurredException(ex)) {
-                  throw;
+            return templateSelector;
+        }
+
+        internal static ItemsPanelTemplate TryGetDragAdornerItemsPanel(UIElement source, UIElement sender)
+        {
+            var itemsPanel = source is not null ? GetDragAdornerItemsPanel(source) : null;
+            if (itemsPanel is null && sender is not null)
+            {
+                itemsPanel = GetDragAdornerItemsPanel(sender);
+            }
+
+            return itemsPanel;
+        }
+
+        internal static DataTemplate TryGetDropAdornerTemplate(UIElement source, UIElement sender)
+        {
+            var template = source is not null ? GetDropAdornerTemplate(source) : null;
+            if (template is null && sender is not null)
+            {
+                template = GetDropAdornerTemplate(sender);
+            }
+
+            return template;
+        }
+
+        internal static DataTemplateSelector TryGetDropAdornerTemplateSelector(UIElement source, UIElement sender)
+        {
+            var templateSelector = source is not null ? GetDropAdornerTemplateSelector(source) : null;
+            if (templateSelector is null && sender is not null)
+            {
+                templateSelector = GetDropAdornerTemplateSelector(sender);
+            }
+
+            return templateSelector;
+        }
+
+        internal static DataTemplate TryGetDropAdornerMultiItemTemplate(UIElement source, UIElement sender)
+        {
+            var template = source is not null ? GetDropAdornerMultiItemTemplate(source) : null;
+            if (template is null && sender is not null)
+            {
+                template = GetDropAdornerMultiItemTemplate(sender);
+            }
+
+            return template;
+        }
+
+        internal static DataTemplateSelector TryGetDropAdornerMultiItemTemplateSelector(UIElement source, UIElement sender)
+        {
+            var templateSelector = source is not null ? GetDropAdornerMultiItemTemplateSelector(source) : null;
+            if (templateSelector is null && sender is not null)
+            {
+                templateSelector = GetDropAdornerMultiItemTemplateSelector(sender);
+            }
+
+            return templateSelector;
+        }
+
+        internal static ItemsPanelTemplate TryGetDropAdornerItemsPanel(UIElement source, UIElement sender)
+        {
+            var itemsPanel = source is not null ? GetDropAdornerItemsPanel(source) : null;
+            if (itemsPanel is null && sender is not null)
+            {
+                itemsPanel = GetDropAdornerItemsPanel(sender);
+            }
+
+            return itemsPanel;
+        }
+
+        internal static int TryGetDragPreviewMaxItemsCount(IDragInfo dragInfo, UIElement sender)
+        {
+            var itemsCount = dragInfo?.VisualSource != null ? GetDragPreviewMaxItemsCount(dragInfo.VisualSource) : -1;
+            if (itemsCount < 0 && sender != null)
+            {
+                itemsCount = GetDragPreviewMaxItemsCount(sender);
+            }
+
+            return itemsCount < 0 || itemsCount >= int.MaxValue ? 10 : itemsCount;
+        }
+
+        internal static IDragPreviewItemsSorter TryGetDragPreviewItemsSorter(IDragInfo dragInfo, UIElement sender)
+        {
+            var itemsSorter = dragInfo?.VisualSource != null ? GetDragPreviewItemsSorter(dragInfo.VisualSource) : null;
+            if (itemsSorter is null && sender != null)
+            {
+                itemsSorter = GetDragPreviewItemsSorter(sender);
+            }
+
+            return itemsSorter;
+        }
+
+        private static IDropTargetItemsSorter TryGetDropTargetItemsSorter(IDropInfo dropInfo, UIElement sender)
+        {
+            var itemsSorter = dropInfo?.VisualTarget != null ? GetDropTargetItemsSorter(dropInfo.VisualTarget) : null;
+            if (itemsSorter is null && sender != null)
+            {
+                itemsSorter = GetDropTargetItemsSorter(sender);
+            }
+
+            return itemsSorter;
+        }
+
+        private static DragDropPreview GetDragDropPreview(IDragInfo dragInfo, UIElement visualTarget, UIElement sender)
+        {
+            var visualSource = dragInfo?.VisualSource;
+            if (visualSource is null)
+            {
+                return null;
+            }
+
+            var hasDragDropPreview = DragDropPreview.HasDragDropPreview(dragInfo, visualTarget ?? visualSource, sender);
+            if (hasDragDropPreview)
+            {
+                var rootElement = TryGetRootElementFinder(sender).FindRoot(visualTarget ?? visualSource);
+
+                var preview = new DragDropPreview(rootElement, dragInfo, visualTarget ?? visualSource, sender);
+                if (preview.Child != null)
+                {
+                    preview.IsOpen = true;
+                    return preview;
                 }
-              }
-              finally {
-                m_DragInProgress = false;
-              }
-
-              m_DragInfo = null;
             }
-          }
-        }
-      }
-    }
 
-    private static void DragSource_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
-    {
-      if (e.Action == DragAction.Cancel || e.EscapePressed) {
-        DragAdorner = null;
-        EffectAdorner = null;
-        DropTargetAdorner = null;
-        Mouse.OverrideCursor = null;
-      }
-    }
-
-    private static void DropTarget_PreviewDragEnter(object sender, DragEventArgs e)
-    {
-      DropTarget_PreviewDragOver(sender, e);
-    }
-
-    private static void DropTarget_PreviewDragLeave(object sender, DragEventArgs e)
-    {
-      DragAdorner = null;
-      EffectAdorner = null;
-      DropTargetAdorner = null;
-    }
-
-    private static void DropTarget_PreviewDragOver(object sender, DragEventArgs e)
-    {
-      var elementPosition = e.GetPosition((IInputElement)sender);
-
-      var dropInfo = new DropInfo(sender, e, m_DragInfo);
-      var dropHandler = TryGetDropHandler(dropInfo, sender as UIElement);
-      var itemsControl = dropInfo.VisualTarget;
-
-      dropHandler.DragOver(dropInfo);
-
-      if (DragAdorner == null && m_DragInfo != null) {
-        CreateDragAdorner(dropInfo);
-      }
-
-      if (DragAdorner != null) {
-        var tempAdornerPos = e.GetPosition(DragAdorner.AdornedElement);
-
-        if (tempAdornerPos.X >= 0 && tempAdornerPos.Y >= 0) {
-          _adornerPos = tempAdornerPos;
+            return null;
         }
 
-        // Fixed the flickering adorner - Size changes to zero 'randomly'...?
-        if (DragAdorner.RenderSize.Width > 0 && DragAdorner.RenderSize.Height > 0) {
-          _adornerSize = DragAdorner.RenderSize;
+        private static DragDropEffectPreview GetDragDropEffectPreview(IDropInfo dropInfo, UIElement sender)
+        {
+            var dragInfo = dropInfo.DragInfo;
+            var template = GetDragDropEffectTemplate(dragInfo.VisualSource, dropInfo);
+
+            if (template != null)
+            {
+                var rootElement = TryGetRootElementFinder(sender).FindRoot(dropInfo.VisualTarget ?? dragInfo.VisualSource);
+
+                var adornment = new ContentPresenter { Content = dragInfo.Data, ContentTemplate = template };
+
+                var preview = new DragDropEffectPreview(rootElement, adornment, GetEffectAdornerTranslation(dragInfo.VisualSource), dropInfo.Effects, dropInfo.EffectText, dropInfo.DestinationText)
+                              {
+                                  IsOpen = true
+                              };
+
+                return preview;
+            }
+
+            return null;
         }
 
-        if (m_DragInfo != null) {
-          // move the adorner
-          var offsetX = _adornerSize.Width * -GetDragMouseAnchorPoint(m_DragInfo.VisualSource).X;
-          var offsetY = _adornerSize.Height * -GetDragMouseAnchorPoint(m_DragInfo.VisualSource).Y;
-          _adornerPos.Offset(offsetX, offsetY);
-          var maxAdornerPosX = DragAdorner.AdornedElement.RenderSize.Width;
-          var adornerPosRightX = (_adornerPos.X + _adornerSize.Width);
-          if (adornerPosRightX > maxAdornerPosX) {
-            _adornerPos.Offset(-adornerPosRightX + maxAdornerPosX, 0);
-          }
-          if (_adornerPos.Y < 0) {
-            _adornerPos.Y = 0;
-          }
+        private static DataTemplate GetDragDropEffectTemplate(UIElement target, IDropInfo dropInfo)
+        {
+            if (target is null)
+            {
+                return null;
+            }
+
+            var effectText = dropInfo.EffectText;
+            var destinationText = dropInfo.DestinationText;
+
+            return dropInfo.Effects switch
+            {
+                DragDropEffects.All => GetEffectAllAdornerTemplate(target), // TODO: Add default template for EffectAll
+                DragDropEffects.Copy => GetEffectCopyAdornerTemplate(target) ?? CreateDefaultEffectDataTemplate(target, IconFactory.EffectCopy, string.IsNullOrEmpty(effectText) ? "Copy to" : effectText, destinationText),
+                DragDropEffects.Link => GetEffectLinkAdornerTemplate(target) ?? CreateDefaultEffectDataTemplate(target, IconFactory.EffectLink, string.IsNullOrEmpty(effectText) ? "Link to" : effectText, destinationText),
+                DragDropEffects.Move => GetEffectMoveAdornerTemplate(target) ?? CreateDefaultEffectDataTemplate(target, IconFactory.EffectMove, string.IsNullOrEmpty(effectText) ? "Move to" : effectText, destinationText),
+                DragDropEffects.None => GetEffectNoneAdornerTemplate(target) ?? CreateDefaultEffectDataTemplate(target, IconFactory.EffectNone, string.IsNullOrEmpty(effectText) ? "None" : effectText, destinationText),
+                DragDropEffects.Scroll => GetEffectScrollAdornerTemplate(target), // TODO: Add default template EffectScroll
+                _ => null
+            };
         }
 
-        DragAdorner.MousePosition = _adornerPos;
-        DragAdorner.InvalidateVisual();
-      }
+        private static DataTemplate CreateDefaultEffectDataTemplate(UIElement target, BitmapImage effectIcon, string effectText, string destinationText)
+        {
+            if (!GetUseDefaultEffectDataTemplate(target))
+            {
+                return null;
+            }
 
-      if (HitTestUtilities.HitTest4Type<ScrollBar>(sender, elementPosition)
-          || HitTestUtilities.HitTest4GridViewColumnHeader(sender, elementPosition)
-          || HitTestUtilities.HitTest4DataGridTypesOnDragOver(sender, elementPosition))
-      {
-        e.Effects = DragDropEffects.None;
-        e.Handled = true;
-        return;
-      }
+            var fontSize = SystemFonts.MessageFontSize; // before 11d
 
-      // If the target is an ItemsControl then update the drop target adorner.
-      if (itemsControl != null) {
-        // Display the adorner in the control's ItemsPresenter. If there is no 
-        // ItemsPresenter provided by the style, try getting hold of a
-        // ScrollContentPresenter and using that.
-        var adornedElement =
-          itemsControl is TabControl
-            ? itemsControl.GetVisualDescendent<TabPanel>()
-            : (itemsControl.GetVisualDescendent<ScrollContentPresenter>() ?? itemsControl.GetVisualDescendent<ItemsPresenter>() as UIElement ?? itemsControl);
+            // The icon
+            var imageFactory = new FrameworkElementFactory(typeof(Image));
+            imageFactory.SetValue(Image.SourceProperty, effectIcon);
+            imageFactory.SetValue(FrameworkElement.HeightProperty, 12d);
+            imageFactory.SetValue(FrameworkElement.WidthProperty, 12d);
 
-        if (adornedElement != null) {
-          if (dropInfo.DropTargetAdorner == null) {
+            // Only the icon for no effect
+            if (Equals(effectIcon, GongSolutions.Wpf.DragDrop.Icons.IconFactory.EffectNone))
+            {
+                return new DataTemplate { VisualTree = imageFactory };
+            }
+
+            // Some margin for the icon
+            imageFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 3, 0));
+            imageFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            // Add effect text
+            var effectTextBlockFactory = new FrameworkElementFactory(typeof(TextBlock));
+            effectTextBlockFactory.SetValue(TextBlock.TextProperty, effectText);
+            effectTextBlockFactory.SetValue(TextBlock.FontSizeProperty, fontSize);
+            effectTextBlockFactory.SetValue(TextBlock.ForegroundProperty, Brushes.Blue);
+            effectTextBlockFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            // Add destination text
+            var destinationTextBlockFactory = new FrameworkElementFactory(typeof(TextBlock));
+            destinationTextBlockFactory.SetValue(TextBlock.TextProperty, destinationText);
+            destinationTextBlockFactory.SetValue(TextBlock.FontSizeProperty, fontSize);
+            destinationTextBlockFactory.SetValue(TextBlock.ForegroundProperty, Brushes.DarkBlue);
+            destinationTextBlockFactory.SetValue(TextBlock.MarginProperty, new Thickness(3, 0, 0, 0));
+            destinationTextBlockFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.DemiBold);
+            destinationTextBlockFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            // Create containing panel
+            var stackPanelFactory = new FrameworkElementFactory(typeof(StackPanel));
+            stackPanelFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            stackPanelFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2));
+            stackPanelFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stackPanelFactory.AppendChild(imageFactory);
+            stackPanelFactory.AppendChild(effectTextBlockFactory);
+            stackPanelFactory.AppendChild(destinationTextBlockFactory);
+
+            // Add border
+            var borderFactory = new FrameworkElementFactory(typeof(Border));
+            var stopCollection = new GradientStopCollection
+                                 {
+                                     new GradientStop(Colors.White, 0.0),
+                                     new GradientStop(Colors.AliceBlue, 1.0)
+                                 };
+            var gradientBrush = new LinearGradientBrush(stopCollection)
+                                {
+                                    StartPoint = new Point(0, 0),
+                                    EndPoint = new Point(0, 1)
+                                };
+            borderFactory.SetValue(Panel.BackgroundProperty, gradientBrush);
+            borderFactory.SetValue(Border.BorderBrushProperty, Brushes.DimGray);
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(3));
+            borderFactory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            borderFactory.SetValue(Border.SnapsToDevicePixelsProperty, true);
+            borderFactory.SetValue(TextOptions.TextFormattingModeProperty, TextFormattingMode.Display);
+            borderFactory.SetValue(TextOptions.TextRenderingModeProperty, TextRenderingMode.ClearType);
+            borderFactory.SetValue(TextOptions.TextHintingModeProperty, TextHintingMode.Fixed);
+            borderFactory.AppendChild(stackPanelFactory);
+
+            // Finally add content to template
+            return new DataTemplate { VisualTree = borderFactory };
+        }
+
+        private static void Scroll(IDropInfo dropInfo, DragEventArgs e)
+        {
+            if (dropInfo?.TargetScrollViewer is null)
+            {
+                return;
+            }
+
+            var scrollViewer = dropInfo.TargetScrollViewer;
+            var scrollingMode = dropInfo.TargetScrollingMode;
+
+            var position = e.GetPosition(scrollViewer);
+            var scrollMargin = Math.Min(scrollViewer.FontSize * 2, scrollViewer.ActualHeight / 2);
+
+            if (scrollingMode == ScrollingMode.Both || scrollingMode == ScrollingMode.HorizontalOnly)
+            {
+                if (position.X >= scrollViewer.ActualWidth - scrollMargin && scrollViewer.HorizontalOffset < scrollViewer.ExtentWidth - scrollViewer.ViewportWidth)
+                {
+                    scrollViewer.LineRight();
+                }
+                else if (position.X < scrollMargin && scrollViewer.HorizontalOffset > 0)
+                {
+                    scrollViewer.LineLeft();
+                }
+            }
+
+            if (scrollingMode == ScrollingMode.Both || scrollingMode == ScrollingMode.VerticalOnly)
+            {
+                if (position.Y >= scrollViewer.ActualHeight - scrollMargin && scrollViewer.VerticalOffset < scrollViewer.ExtentHeight - scrollViewer.ViewportHeight)
+                {
+                    scrollViewer.LineDown();
+                }
+                else if (position.Y < scrollMargin && scrollViewer.VerticalOffset > 0)
+                {
+                    scrollViewer.LineUp();
+                }
+            }
+        }
+
+        private static void DragSourceOnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            DoMouseButtonDown(sender, e);
+        }
+
+        private static void DragSourceOnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            DoMouseButtonDown(sender, e);
+        }
+
+        private static void DragSourceOnTouchDown(object sender, TouchEventArgs e)
+        {
+            _dragInfo = null;
+
+            // Ignore the click if clickCount != 1 or the user has clicked on a scrollbar.
+            var elementPosition = e.GetTouchPoint((IInputElement)sender).Position;
+            if ((sender as UIElement).IsDragSourceIgnored()
+                || (e.Source as UIElement).IsDragSourceIgnored()
+                || (e.OriginalSource as UIElement).IsDragSourceIgnored()
+                || GetHitTestResult(sender, elementPosition)
+                || HitTestUtilities.IsNotPartOfSender(sender, e))
+            {
+                return;
+            }
+
+            var infoBuilder = TryGetDragInfoBuilder(sender as DependencyObject);
+            var dragInfo = infoBuilder?.CreateDragInfo(sender, e.OriginalSource, MouseButton.Left, item => e.GetTouchPoint(item).Position)
+                           ?? new DragInfo(sender, e.OriginalSource, MouseButton.Left, item => e.GetTouchPoint(item).Position);
+
+            DragSourceDown(sender, dragInfo, e, elementPosition);
+        }
+
+        private static void DoMouseButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _dragInfo = null;
+
+            // Ignore the click if clickCount != 1 or the user has clicked on a scrollbar.
+            var elementPosition = e.GetPosition((IInputElement)sender);
+            if (e.ClickCount != 1
+                || (sender as UIElement).IsDragSourceIgnored()
+                || (e.Source as UIElement).IsDragSourceIgnored()
+                || (e.OriginalSource as UIElement).IsDragSourceIgnored()
+                || GetHitTestResult(sender, elementPosition)
+                || HitTestUtilities.IsNotPartOfSender(sender, e))
+            {
+                return;
+            }
+
+            var infoBuilder = TryGetDragInfoBuilder(sender as DependencyObject);
+            var dragInfo = infoBuilder?.CreateDragInfo(sender, e.OriginalSource, e.ChangedButton, item => e.GetPosition(item))
+                           ?? new DragInfo(sender, e.OriginalSource, e.ChangedButton, item => e.GetPosition(item));
+
+            DragSourceDown(sender, dragInfo, e, elementPosition);
+        }
+
+        private static void DragSourceDown(object sender, DragInfo dragInfo, InputEventArgs e, Point elementPosition)
+        {
+            if (dragInfo.VisualSource is ItemsControl control && control.CanSelectMultipleItems())
+            {
+                control.Focus();
+            }
+
+            if (dragInfo.VisualSourceItem == null)
+            {
+                return;
+            }
+
+            var dragHandler = TryGetDragHandler(dragInfo, sender as UIElement);
+            if (!dragHandler.CanStartDrag(dragInfo))
+            {
+                return;
+            }
+
+            // If the sender is a list box that allows multiple selections, ensure that clicking on an 
+            // already selected item does not change the selection, otherwise dragging multiple items 
+            // is made impossible.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0
+                //&& (Keyboard.Modifiers & ModifierKeys.Control) == 0 // #432
+                && dragInfo.VisualSourceItem != null
+                && sender is ItemsControl itemsControl
+                && itemsControl.CanSelectMultipleItems())
+            {
+                var selectedItems = itemsControl.GetSelectedItems().OfType<object>().ToList();
+                if (selectedItems.Count > 1 && selectedItems.Contains(dragInfo.SourceItem))
+                {
+                    if (!HitTestUtilities.HitTest4Type<ToggleButton>(sender, elementPosition))
+                    {
+                        _clickSupressItem = dragInfo.SourceItem;
+                        e.Handled = true;
+                    }
+                }
+            }
+
+            _dragInfo = dragInfo;
+        }
+
+        private static void DragSourceOnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            DragSourceUp(sender, e.GetPosition((IInputElement)sender));
+        }
+
+        private static void DragSourceOnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            DragSourceUp(sender, e.GetPosition((IInputElement)sender));
+        }
+
+        private static void DragSourceOnTouchUp(object sender, TouchEventArgs e)
+        {
+            DragSourceUp(sender, e.GetTouchPoint((IInputElement)sender).Position);
+        }
+
+        private static void DragSourceUp(object sender, Point elementPosition)
+        {
+            if (HitTestUtilities.HitTest4Type<ToggleButton>(sender, elementPosition))
+            {
+                return;
+            }
+
+            var dragInfo = _dragInfo;
+
+            // If we prevented the control's default selection handling in DragSource_PreviewMouseLeftButtonDown
+            // by setting 'e.Handled = true' and a drag was not initiated, manually set the selection here.
+            if (dragInfo?.VisualSource is ItemsControl itemsControl && _clickSupressItem != null && _clickSupressItem == dragInfo.SourceItem)
+            {
+                if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 || itemsControl is ListBox listBox && listBox.SelectionMode == SelectionMode.Multiple)
+                {
+                    itemsControl.SetItemSelected(dragInfo.SourceItem, false);
+                }
+                else if ((Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+                {
+                    itemsControl.SetSelectedItem(dragInfo.SourceItem);
+
+                    if (sender != itemsControl && sender is ItemsControl ancestorItemsControl)
+                    {
+                        var ancestorItemContainer = ancestorItemsControl.ContainerFromElement(itemsControl);
+
+                        if (ancestorItemContainer != null)
+                        {
+                            var ancestorItem = ancestorItemsControl.ItemContainerGenerator.ItemFromContainer(ancestorItemContainer);
+
+                            if (ancestorItem != null)
+                            {
+                                ancestorItemsControl.SetSelectedItem(ancestorItem);
+                            }
+                        }
+                    }
+                }
+            }
+
+            _dragInfo = null;
+            _clickSupressItem = null;
+        }
+
+        private static void DragSourceOnTouchMove(object sender, TouchEventArgs e)
+        {
+            if (_dragInfo != null && !_dragInProgress)
+            {
+                // do nothing if mouse left/right button is released or the pointer is captured
+                if (_dragInfo.MouseButton == MouseButton.Left && !e.TouchDevice.IsActive)
+                {
+                    _dragInfo = null;
+                    return;
+                }
+
+                DoDragSourceMove(sender, element => e.GetTouchPoint(element).Position);
+            }
+        }
+
+        private static void DragSourceOnMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_dragInfo != null && !_dragInProgress)
+            {
+                if (_dragInfo.MouseButton == MouseButton.Left && e.LeftButton == MouseButtonState.Released)
+                {
+                    _dragInfo = null;
+                    return;
+                }
+
+                if (GetCanDragWithMouseRightButton(_dragInfo.VisualSource)
+                    && _dragInfo.MouseButton == MouseButton.Right
+                    && e.RightButton == MouseButtonState.Released)
+                {
+                    _dragInfo = null;
+                    return;
+                }
+
+                DoDragSourceMove(sender, element => e.GetPosition(element));
+            }
+        }
+
+        private static void DoDragSourceMove(object sender, Func<IInputElement, Point> getPosition)
+        {
+            var dragInfo = _dragInfo;
+            if (dragInfo != null && !_dragInProgress)
+            {
+                // the start from the source
+                var dragStart = dragInfo.DragStartPosition;
+
+                // prevent selection changing while drag operation
+                dragInfo.VisualSource?.ReleaseMouseCapture();
+
+                // only if the sender is the source control and the mouse point differs from an offset
+                var position = getPosition((IInputElement)sender);
+                if (dragInfo.VisualSource == sender
+                    && (Math.Abs(position.X - dragStart.X) > DragDrop.GetMinimumHorizontalDragDistance(dragInfo.VisualSource) ||
+                        Math.Abs(position.Y - dragStart.Y) > DragDrop.GetMinimumVerticalDragDistance(dragInfo.VisualSource)))
+                {
+                    dragInfo.RefreshSelectedItems(sender);
+
+                    var dragHandler = TryGetDragHandler(dragInfo, sender as UIElement);
+                    if (dragHandler.CanStartDrag(dragInfo))
+                    {
+                        dragHandler.StartDrag(dragInfo);
+
+                        if (dragInfo.Effects != DragDropEffects.None)
+                        {
+                            var dataObject = dragInfo.DataObject;
+
+                            if (dataObject == null)
+                            {
+                                if (dragInfo.Data == null)
+                                {
+                                    // it's bad if the Data is null, cause the DataObject constructor will raise an ArgumentNullException
+                                    _dragInfo = null; // maybe not necessary or should not set here to null
+                                    return;
+                                }
+
+                                dataObject = new DataObject(dragInfo.DataFormat.Name, dragInfo.Data);
+                            }
+
+                            try
+                            {
+                                _dragInProgress = true;
+
+                                if (DragDropPreview is null)
+                                {
+                                    DragDropPreview = GetDragDropPreview(dragInfo, null, sender as UIElement);
+                                    DragDropPreview?.Move(getPosition(DragDropPreview.PlacementTarget));
+                                }
+
+                                MouseHelper.HookMouseMove(point =>
+                                    {
+                                        if (DragDropPreview?.PlacementTarget != null)
+                                        {
+                                            DragDropPreview.Move(DragDropPreview.PlacementTarget.PointFromScreen(point));
+                                        }
+
+                                        if (DragDropEffectPreview?.PlacementTarget != null)
+                                        {
+                                            DragDropEffectPreview.Move(DragDropEffectPreview.PlacementTarget.PointFromScreen(point));
+                                        }
+                                    });
+
+                                var dragDropHandler = dragInfo.DragDropHandler ?? System.Windows.DragDrop.DoDragDrop;
+                                var dragDropEffects = dragDropHandler(dragInfo.VisualSource, dataObject, dragInfo.Effects);
+                                if (dragDropEffects == DragDropEffects.None)
+                                {
+                                    dragHandler.DragCancelled();
+                                }
+
+                                dragHandler.DragDropOperationFinished(dragDropEffects, dragInfo);
+                            }
+                            catch (Exception ex)
+                            {
+                                if (!dragHandler.TryCatchOccurredException(ex))
+                                {
+                                    throw;
+                                }
+                            }
+                            finally
+                            {
+                                MouseHelper.UnHook();
+                                _dragInProgress = false;
+                                _dragInfo = null;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void DragSourceOnQueryContinueDrag(object sender, QueryContinueDragEventArgs e)
+        {
+            if (e.Action == DragAction.Cancel || e.EscapePressed || (e.KeyStates.HasFlag(DragDropKeyStates.LeftMouseButton) == e.KeyStates.HasFlag(DragDropKeyStates.RightMouseButton)))
+            {
+                DragDropPreview = null;
+                DragDropEffectPreview = null;
+                DropTargetAdorner = null;
+                Mouse.OverrideCursor = null;
+            }
+        }
+
+        private static void DropTargetOnDragLeave(object sender, DragEventArgs e)
+        {
+            SetIsDragOver(sender as DependencyObject, false);
             DropTargetAdorner = null;
-          } else if (!dropInfo.DropTargetAdorner.IsInstanceOfType(DropTargetAdorner)) {
-            DropTargetAdorner = DropTargetAdorner.Create(dropInfo.DropTargetAdorner, adornedElement);
-          }
 
-          if (DropTargetAdorner != null) {
-            DropTargetAdorner.DropInfo = dropInfo;
-            DropTargetAdorner.InvalidateVisual();
-          }
+            (sender as UIElement)?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (GetIsDragOver(sender as DependencyObject) == false && GetIsDragLeaved(sender as DependencyObject) == false)
+                    {
+                        OnRealTargetDragLeave(sender, e);
+                    }
+                }));
         }
-      }
 
-      // Set the drag effect adorner if there is one
-      if (m_DragInfo != null && (EffectAdorner == null || EffectAdorner.Effects != dropInfo.Effects)) {
-        CreateEffectAdorner(dropInfo);
-      }
-
-      if (EffectAdorner != null) {
-        var adornerPos = e.GetPosition(EffectAdorner.AdornedElement);
-        adornerPos.Offset(20, 20);
-        EffectAdorner.MousePosition = adornerPos;
-        EffectAdorner.InvalidateVisual();
-      }
-
-      e.Effects = dropInfo.Effects;
-      e.Handled = !dropInfo.NotHandled;
-
-      if (!dropInfo.IsSameDragDropContextAsSource)
-      {
-          e.Effects = DragDropEffects.None;
-      }
-
-      Scroll(dropInfo.TargetScrollViewer, e);
-    }
-
-    private static void DropTarget_PreviewDrop(object sender, DragEventArgs e)
-    {
-      var dropInfo = new DropInfo(sender, e, m_DragInfo);
-      var dropHandler = TryGetDropHandler(dropInfo, sender as UIElement);
-      var dragHandler = TryGetDragHandler(m_DragInfo, sender as UIElement);
-
-      DragAdorner = null;
-      EffectAdorner = null;
-      DropTargetAdorner = null;
-
-      dropHandler.DragOver(dropInfo);
-      dropHandler.Drop(dropInfo);
-      dragHandler.Dropped(dropInfo);
-
-      Mouse.OverrideCursor = null;
-      e.Handled = !dropInfo.NotHandled;
-    }
-
-    private static void DropTarget_GiveFeedback(object sender, GiveFeedbackEventArgs e)
-    {
-      if (EffectAdorner != null)
-      {
-        e.UseDefaultCursors = false;
-        e.Handled = true;
-        if (Mouse.OverrideCursor != Cursors.Arrow)
+        private static void OnRealTargetDragLeave(object sender, DragEventArgs e)
         {
-          Mouse.OverrideCursor = Cursors.Arrow;
+            SetIsDragLeaved(sender as DependencyObject, true);
+
+            var eventType = e.RoutedEvent?.RoutingStrategy switch
+            {
+                RoutingStrategy.Tunnel => EventType.Tunneled,
+                RoutingStrategy.Bubble => EventType.Bubbled,
+                _ => EventType.Auto
+            };
+
+            var dragInfo = _dragInfo;
+            var dropInfoBuilder = TryGetDropInfoBuilder(sender as DependencyObject);
+            var dropInfo = dropInfoBuilder?.CreateDropInfo(sender, e, dragInfo, eventType) ?? new DropInfo(sender, e, dragInfo, eventType);
+            var dropHandler = TryGetDropHandler(dropInfo, sender as UIElement);
+
+            dropHandler?.DragLeave(dropInfo);
+
+            DragDropEffectPreview = null;
+            DropTargetAdorner = null;
         }
-      }
-      else
-      {
-        e.UseDefaultCursors = true;
-        e.Handled = true;
-        if (Mouse.OverrideCursor != null)
+
+        private static void DropTargetOnDragEnter(object sender, DragEventArgs e)
         {
-          Mouse.OverrideCursor = null;
-        }
-      }
-    }
-
-    private static DragAdorner DragAdorner
-    {
-      get { return m_DragAdorner; }
-      set
-      {
-        if (m_DragAdorner != null) {
-          m_DragAdorner.Detatch();
+            DropTargetOnDragOver(sender, e, EventType.Bubbled, GetIsDragLeaved(sender as DependencyObject));
         }
 
-        m_DragAdorner = value;
-      }
-    }
-
-    private static DragAdorner EffectAdorner
-    {
-      get { return m_EffectAdorner; }
-      set
-      {
-        if (m_EffectAdorner != null) {
-          m_EffectAdorner.Detatch();
+        private static void DropTargetOnPreviewDragEnter(object sender, DragEventArgs e)
+        {
+            DropTargetOnDragOver(sender, e, EventType.Tunneled, GetIsDragLeaved(sender as DependencyObject));
         }
 
-        m_EffectAdorner = value;
-      }
-    }
-
-    private static DropTargetAdorner DropTargetAdorner
-    {
-      get { return m_DropTargetAdorner; }
-      set
-      {
-        if (m_DropTargetAdorner != null) {
-          m_DropTargetAdorner.Detatch();
+        private static void DropTargetOnDragOver(object sender, DragEventArgs e)
+        {
+            DropTargetOnDragOver(sender, e, EventType.Bubbled, false);
         }
 
-        m_DropTargetAdorner = value;
-      }
-    }
+        private static void DropTargetOnPreviewDragOver(object sender, DragEventArgs e)
+        {
+            DropTargetOnDragOver(sender, e, EventType.Tunneled, false);
+        }
 
-    private static IDragSource m_DefaultDragHandler;
-    private static IDropTarget m_DefaultDropHandler;
-    private static DragAdorner m_DragAdorner;
-    private static DragAdorner m_EffectAdorner;
-    private static DragInfo m_DragInfo;
-    private static bool m_DragInProgress;
-    private static DropTargetAdorner m_DropTargetAdorner;
-    private static object m_ClickSupressItem;
-    private static Point _adornerPos;
-    private static Size _adornerSize;
-  }
+        private static void DropTargetOnDragOver(object sender, DragEventArgs e, EventType eventType, bool isDragEnter)
+        {
+            SetIsDragOver(sender as DependencyObject, true);
+            SetIsDragLeaved(sender as DependencyObject, false);
+
+            var elementPosition = e.GetPosition((IInputElement)sender);
+
+            var dragInfo = _dragInfo;
+            var dropInfoBuilder = TryGetDropInfoBuilder(sender as DependencyObject);
+            var dropInfo = dropInfoBuilder?.CreateDropInfo(sender, e, dragInfo, eventType) ?? new DropInfo(sender, e, dragInfo, eventType);
+            var dropHandler = TryGetDropHandler(dropInfo, sender as UIElement);
+            var itemsControl = dropInfo.VisualTarget;
+
+            if (isDragEnter)
+            {
+                dropHandler.DragEnter(dropInfo);
+            }
+
+            dropHandler.DragOver(dropInfo);
+
+            if (dragInfo is not null)
+            {
+                if (DragDropPreview is null)
+                {
+                    DragDropPreview = GetDragDropPreview(dragInfo, dropInfo.VisualTarget, sender as UIElement);
+                    DragDropPreview?.Move(e.GetPosition(DragDropPreview.PlacementTarget));
+                }
+
+                DragDropPreview?.UpdatePreviewPresenter(dragInfo, dropInfo.VisualTarget, sender as UIElement);
+            }
+
+            Scroll(dropInfo, e);
+
+            if (HitTestUtilities.HitTest4Type<ScrollBar>(sender, elementPosition)
+                || HitTestUtilities.HitTest4GridViewColumnHeader(sender, elementPosition)
+                || HitTestUtilities.HitTest4DataGridTypesOnDragOver(sender, elementPosition))
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            // If the target is an ItemsControl then update the drop target adorner.
+            if (itemsControl != null)
+            {
+                // Display the adorner in the control's ItemsPresenter. If there is no 
+                // ItemsPresenter provided by the style, try getting hold of a
+                // ScrollContentPresenter and using that.
+                UIElement adornedElement;
+                if (itemsControl is TabControl)
+                {
+                    adornedElement = itemsControl.GetVisualDescendent<TabPanel>();
+                }
+                else if (itemsControl is DataGrid || (itemsControl as ListView)?.View is GridView)
+                {
+                    adornedElement = itemsControl.GetVisualDescendent<ScrollContentPresenter>() as UIElement ?? itemsControl.GetVisualDescendent<ItemsPresenter>() as UIElement ?? itemsControl;
+                }
+                else
+                {
+                    adornedElement = itemsControl.GetVisualDescendent<ItemsPresenter>() as UIElement ?? itemsControl.GetVisualDescendent<ScrollContentPresenter>() as UIElement ?? itemsControl;
+                }
+
+                if (adornedElement != null)
+                {
+                    if (dropInfo.DropTargetAdorner == null)
+                    {
+                        DropTargetAdorner = null;
+                    }
+                    else if (!dropInfo.DropTargetAdorner.IsInstanceOfType(DropTargetAdorner))
+                    {
+                        DropTargetAdorner = DropTargetAdorner.Create(dropInfo.DropTargetAdorner, adornedElement, dropInfo);
+                    }
+
+                    var adorner = DropTargetAdorner;
+                    if (adorner != null)
+                    {
+                        var adornerPen = GetDropTargetAdornerPen(dropInfo.VisualTarget);
+                        if (adornerPen != null)
+                        {
+                            adorner.Pen = adornerPen;
+                        }
+                        else
+                        {
+                            var adornerBrush = GetDropTargetAdornerBrush(dropInfo.VisualTarget);
+                            if (adornerBrush != null)
+                            {
+                                adorner.Pen.SetCurrentValue(Pen.BrushProperty, adornerBrush);
+                            }
+                        }
+
+                        adorner.DropInfo = dropInfo;
+                        adorner.InvalidateVisual();
+                    }
+                }
+            }
+
+            // Set the drag effect adorner if there is one
+            if (dragInfo != null)
+            {
+                if (DragDropEffectPreview is null)
+                {
+                    DragDropEffectPreview = GetDragDropEffectPreview(dropInfo, sender as UIElement);
+                    DragDropEffectPreview?.Move(e.GetPosition(DragDropEffectPreview.PlacementTarget));
+                }
+                else if (DragDropEffectPreview.Effects != dropInfo.Effects || DragDropEffectPreview.EffectText != dropInfo.EffectText || DragDropEffectPreview.DestinationText != dropInfo.DestinationText)
+                {
+                    DragDropEffectPreview.Effects = dropInfo.Effects;
+                    DragDropEffectPreview.EffectText = dropInfo.EffectText;
+                    DragDropEffectPreview.DestinationText = dropInfo.DestinationText;
+
+                    var template = GetDragDropEffectTemplate(dragInfo.VisualSource, dropInfo);
+                    if (template is null)
+                    {
+                        DragDropEffectPreview = null;
+                    }
+                    else
+                    {
+                        ((ContentPresenter)DragDropEffectPreview.Child).SetCurrentValue(ContentPresenter.ContentTemplateProperty, template);
+                    }
+                }
+            }
+
+            e.Effects = dropInfo.Effects;
+            e.Handled = !dropInfo.NotHandled;
+
+            if (!dropInfo.IsSameDragDropContextAsSource)
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private static void DropTargetOnDrop(object sender, DragEventArgs e)
+        {
+            DropTargetOnDrop(sender, e, EventType.Bubbled);
+        }
+
+        private static void DropTargetOnPreviewDrop(object sender, DragEventArgs e)
+        {
+            DropTargetOnDrop(sender, e, EventType.Tunneled);
+        }
+
+        private static void DropTargetOnDrop(object sender, DragEventArgs e, EventType eventType)
+        {
+            var dragInfo = _dragInfo;
+            var dropInfoBuilder = TryGetDropInfoBuilder(sender as DependencyObject);
+            var dropInfo = dropInfoBuilder?.CreateDropInfo(sender, e, dragInfo, eventType) ?? new DropInfo(sender, e, dragInfo, eventType);
+            var dropHandler = TryGetDropHandler(dropInfo, sender as UIElement);
+            var dragHandler = TryGetDragHandler(dragInfo, sender as UIElement);
+            var itemsSorter = TryGetDropTargetItemsSorter(dropInfo, sender as UIElement);
+
+            DragDropPreview = null;
+            DragDropEffectPreview = null;
+            DropTargetAdorner = null;
+
+            dropHandler.DragOver(dropInfo);
+
+            if (itemsSorter != null && dropInfo.Data is IEnumerable enumerable and not string)
+            {
+                dropInfo.Data = itemsSorter.SortDropTargetItems(enumerable);
+            }
+
+            dropHandler.Drop(dropInfo);
+            dragHandler.Dropped(dropInfo);
+
+            e.Effects = dropInfo.Effects;
+            e.Handled = !dropInfo.NotHandled;
+
+            Mouse.OverrideCursor = null;
+            SetIsDragLeaved(sender as DependencyObject, true);
+        }
+
+        private static void DragSourceOnGiveFeedback(object sender, GiveFeedbackEventArgs e)
+        {
+            if (DragDropEffectPreview != null)
+            {
+                e.UseDefaultCursors = false;
+                e.Handled = true;
+                if (Mouse.OverrideCursor != Cursors.Arrow)
+                {
+                    Mouse.OverrideCursor = Cursors.Arrow;
+                }
+            }
+            else
+            {
+                e.UseDefaultCursors = true;
+                e.Handled = true;
+                if (Mouse.OverrideCursor != null)
+                {
+                    Mouse.OverrideCursor = null;
+                }
+            }
+        }
+
+        private static void DropTargetOnGiveFeedback(object sender, GiveFeedbackEventArgs e)
+        {
+            if (DragDropEffectPreview != null)
+            {
+                e.UseDefaultCursors = false;
+                e.Handled = true;
+                if (Mouse.OverrideCursor != Cursors.Arrow)
+                {
+                    Mouse.OverrideCursor = Cursors.Arrow;
+                }
+            }
+            else
+            {
+                e.UseDefaultCursors = true;
+                e.Handled = true;
+                if (Mouse.OverrideCursor != null)
+                {
+                    Mouse.OverrideCursor = null;
+                }
+            }
+        }
+
+        private static bool GetHitTestResult(object sender, Point elementPosition)
+        {
+            return ((sender is TabControl) && !HitTestUtilities.HitTest4Type<TabPanel>(sender, elementPosition))
+                   || HitTestUtilities.HitTest4Type<RangeBase>(sender, elementPosition)
+                   || HitTestUtilities.HitTest4Type<TextBoxBase>(sender, elementPosition)
+                   || HitTestUtilities.HitTest4Type<PasswordBox>(sender, elementPosition)
+                   || HitTestUtilities.HitTest4Type<ComboBox>(sender, elementPosition)
+                   || HitTestUtilities.HitTest4Type<MenuBase>(sender, elementPosition)
+                   || HitTestUtilities.HitTest4GridViewColumnHeader(sender, elementPosition)
+                   || HitTestUtilities.HitTest4DataGridTypes(sender, elementPosition);
+        }
+
+        private static DragDropPreview dragDropPreview;
+
+        private static DragDropPreview DragDropPreview
+        {
+            get => dragDropPreview;
+            set
+            {
+                dragDropPreview?.SetCurrentValue(Popup.IsOpenProperty, false);
+                dragDropPreview = value;
+            }
+        }
+
+        private static DragDropEffectPreview dragDropEffectPreview;
+
+        private static DragDropEffectPreview DragDropEffectPreview
+        {
+            get => dragDropEffectPreview;
+            set
+            {
+                if (dragDropEffectPreview is { })
+                {
+                    dragDropEffectPreview.SetCurrentValue(Popup.PopupAnimationProperty, PopupAnimation.None);
+                    dragDropEffectPreview.SetCurrentValue(Popup.IsOpenProperty, false);
+                }
+
+                dragDropEffectPreview = value;
+            }
+        }
+
+        private static DropTargetAdorner dropTargetAdorner;
+
+        private static DropTargetAdorner DropTargetAdorner
+        {
+            get => dropTargetAdorner;
+            set
+            {
+                dropTargetAdorner?.Detatch();
+                dropTargetAdorner = value;
+            }
+        }
+
+        private static DragInfo _dragInfo;
+        private static bool _dragInProgress;
+        private static object _clickSupressItem;
+
+        internal static readonly DependencyProperty IsDragOverProperty
+            = DependencyProperty.RegisterAttached("IsDragOver",
+                                                  typeof(bool),
+                                                  typeof(DragDrop),
+                                                  new PropertyMetadata(default(bool)));
+
+        /// <summary>Helper for setting <see cref="IsDragOverProperty"/> on <paramref name="element"/>.</summary>
+        /// <param name="element"><see cref="DependencyObject"/> to set <see cref="IsDragOverProperty"/> on.</param>
+        /// <param name="value">IsDragOver property value.</param>
+        [AttachedPropertyBrowsableForType(typeof(DependencyObject))]
+        internal static void SetIsDragOver(DependencyObject element, bool value)
+        {
+            element.SetValue(IsDragOverProperty, value);
+        }
+
+        /// <summary>Helper for getting <see cref="IsDragOverProperty"/> from <paramref name="element"/>.</summary>
+        /// <param name="element"><see cref="DependencyObject"/> to read <see cref="IsDragOverProperty"/> from.</param>
+        /// <returns>IsDragOver property value.</returns>
+        [AttachedPropertyBrowsableForType(typeof(DependencyObject))]
+        internal static bool GetIsDragOver(DependencyObject element)
+        {
+            return (bool)element.GetValue(IsDragOverProperty);
+        }
+
+        internal static readonly DependencyProperty IsDragLeavedProperty
+            = DependencyProperty.RegisterAttached("IsDragLeaved",
+                                                  typeof(bool),
+                                                  typeof(DragDrop),
+                                                  new PropertyMetadata(true));
+
+        /// <summary>Helper for setting <see cref="IsDragLeavedProperty"/> on <paramref name="element"/>.</summary>
+        /// <param name="element"><see cref="DependencyObject"/> to set <see cref="IsDragLeavedProperty"/> on.</param>
+        /// <param name="value">IsDragLeaved property value.</param>
+        [AttachedPropertyBrowsableForType(typeof(DependencyObject))]
+        internal static void SetIsDragLeaved(DependencyObject element, bool value)
+        {
+            element.SetValue(IsDragLeavedProperty, value);
+        }
+
+        /// <summary>Helper for getting <see cref="IsDragLeavedProperty"/> from <paramref name="element"/>.</summary>
+        /// <param name="element"><see cref="DependencyObject"/> to read <see cref="IsDragLeavedProperty"/> from.</param>
+        /// <returns>IsDragLeaved property value.</returns>
+        [AttachedPropertyBrowsableForType(typeof(DependencyObject))]
+        internal static bool GetIsDragLeaved(DependencyObject element)
+        {
+            return (bool)element.GetValue(IsDragLeavedProperty);
+        }
+    }
 }

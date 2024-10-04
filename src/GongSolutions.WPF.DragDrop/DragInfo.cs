@@ -9,219 +9,214 @@ using GongSolutions.Wpf.DragDrop.Utilities;
 
 namespace GongSolutions.Wpf.DragDrop
 {
-  /// <summary>
-  /// Holds information about a the source of a drag drop operation.
-  /// </summary>
-  /// 
-  /// <remarks>
-  /// The <see cref="DragInfo"/> class holds all of the framework's information about the source
-  /// of a drag. It is used by <see cref="IDragSource.StartDrag"/> to determine whether a drag 
-  /// can start, and what the dragged data should be.
-  /// </remarks>
-  public class DragInfo : IDragInfo
-  {
     /// <summary>
-    /// Initializes a new instance of the DragInfo class.
+    /// Holds information about a the source of a drag drop operation.
     /// </summary>
     /// 
-    /// <param name="sender">
-    /// The sender of the mouse event that initiated the drag.
-    /// </param>
-    /// 
-    /// <param name="e">
-    /// The mouse event that initiated the drag.
-    /// </param>
-    public DragInfo(object sender, MouseButtonEventArgs e)
+    /// <remarks>
+    /// The <see cref="DragInfo"/> class holds all of the framework's information about the source
+    /// of a drag. It is used by <see cref="IDragSource.StartDrag"/> to determine whether a drag 
+    /// can start, and what the dragged data should be.
+    /// </remarks>
+    public class DragInfo : IDragInfo
     {
-      this.DragStartPosition = e.GetPosition((IInputElement)sender);
-      this.Effects = DragDropEffects.None;
-      this.MouseButton = e.ChangedButton;
-      this.VisualSource = sender as UIElement;
-      this.DragDropCopyKeyState = DragDrop.GetDragDropCopyKeyState(this.VisualSource);
+        /// <inheritdoc />
+        public DataFormat DataFormat { get; set; } = DragDrop.DataFormat;
 
-      if (sender is ItemsControl) {
-        var itemsControl = (ItemsControl)sender;
+        /// <inheritdoc />
+        public object Data { get; set; }
 
-        this.SourceGroup = itemsControl.FindGroup(this.DragStartPosition);
-        this.VisualSourceFlowDirection = itemsControl.GetItemsPanelFlowDirection();
+        /// <inheritdoc />
+        public Point DragStartPosition { get; protected set; }
 
-        var sourceItem = e.OriginalSource as UIElement; // If we can't cast object as a UIElement it might be a FrameworkContentElement, if so try and use its parent.
-        if (sourceItem == null && e.OriginalSource is FrameworkContentElement) {
-          sourceItem = ((FrameworkContentElement)e.OriginalSource).Parent as UIElement;
-        }
-        UIElement item = null;
-        if (sourceItem != null) {
-          item = itemsControl.GetItemContainer(sourceItem);
-        }
-          
-        if (item == null)
+        /// <inheritdoc />
+        public Point PositionInDraggedItem { get; protected set; }
+
+        /// <inheritdoc />
+        public DragDropEffects Effects { get; set; }
+
+        /// <inheritdoc />
+        public MouseButton MouseButton { get; protected set; }
+
+        /// <inheritdoc />
+        public IEnumerable SourceCollection { get; protected set; }
+
+        /// <inheritdoc />
+        public int SourceIndex { get; protected set; }
+
+        /// <inheritdoc />
+        public object SourceItem { get; protected set; }
+
+        /// <inheritdoc />
+        public IEnumerable SourceItems { get; protected set; }
+
+        /// <inheritdoc />
+        public CollectionViewGroup SourceGroup { get; protected set; }
+
+        /// <inheritdoc />
+        public UIElement VisualSource { get; protected set; }
+
+        /// <inheritdoc />
+        public UIElement VisualSourceItem { get; protected set; }
+
+        /// <inheritdoc />
+        public FlowDirection VisualSourceFlowDirection { get; protected set; }
+
+        /// <inheritdoc />
+        public object DataObject { get; set; }
+
+        /// <inheritdoc />
+        public Func<DependencyObject, object, DragDropEffects, DragDropEffects> DragDropHandler { get; set; } = System.Windows.DragDrop.DoDragDrop;
+
+        /// <inheritdoc />
+        public DragDropKeyStates DragDropCopyKeyState { get; protected set; }
+
+        /// <summary>
+        /// Initializes a new instance of the DragInfo class.
+        /// </summary>
+        /// <param name="sender">The sender of the input event that initiated the drag operation.</param>
+        /// <param name="originalSource">The original source of the input event.</param>
+        /// <param name="mouseButton">The mouse button which was used for the drag operation.</param>
+        /// <param name="getPosition">A function of the input event which is used to get drag position points.</param>
+        public DragInfo(object sender, object originalSource, MouseButton mouseButton, Func<IInputElement, Point> getPosition)
         {
-          if (DragDrop.GetDragDirectlySelectedOnly(VisualSource))
-          {
-            item = itemsControl.GetItemContainerAt(e.GetPosition(itemsControl));
-          }
-          else
-          {
-            item = itemsControl.GetItemContainerAt(e.GetPosition(itemsControl), itemsControl.GetItemsPanelOrientation());
-          }
-        }
+            this.MouseButton = mouseButton;
+            this.Effects = DragDropEffects.None;
+            this.VisualSource = sender as UIElement;
+            this.DragStartPosition = getPosition(this.VisualSource);
+            this.DragDropCopyKeyState = DragDrop.GetDragDropCopyKeyState(this.VisualSource);
 
-        if (item != null) {
-          // Remember the relative position of the item being dragged
-          this.PositionInDraggedItem = e.GetPosition(item);
-
-          var itemParent = ItemsControl.ItemsControlFromItemContainer(item);
-
-          if (itemParent != null) {
-            this.SourceCollection = itemParent.ItemsSource ?? itemParent.Items;
-            if (itemParent != itemsControl)
+            var dataFormat = DragDrop.GetDataFormat(this.VisualSource);
+            if (dataFormat != null)
             {
-              var tvItem = item as TreeViewItem;
-              if (tvItem != null)
-              {
-                var tv = tvItem.GetVisualAncestor<TreeView>();
-                if (tv != null && tv != itemsControl && !tv.IsDragSource())
-                {
-                  return;
-                }
-              }
-              else if (itemsControl.ItemContainerGenerator.IndexFromContainer(itemParent) < 0 && !itemParent.IsDragSource())
-              {
-                return;
-              }
+                this.DataFormat = dataFormat;
             }
-            this.SourceIndex = itemParent.ItemContainerGenerator.IndexFromContainer(item);
-            this.SourceItem = itemParent.ItemContainerGenerator.ItemFromContainer(item);
-          } else {
-            this.SourceIndex = -1;
-          }
-          this.SourceItems = itemsControl.GetSelectedItems();
 
-          // Some controls (I'm looking at you TreeView!) haven't updated their
-          // SelectedItem by this point. Check to see if there 1 or less item in 
-          // the SourceItems collection, and if so, override the control's 
-          // SelectedItems with the clicked item.
-          if (this.SourceItems.Cast<object>().Count() <= 1) {
-            this.SourceItems = Enumerable.Repeat(this.SourceItem, 1);
-          }
+            var sourceElement = originalSource as UIElement;
+            // If we can't cast object as a UIElement it might be a FrameworkContentElement, if so try and use its parent.
+            if (sourceElement == null && originalSource is FrameworkContentElement frameworkContentElement)
+            {
+                sourceElement = frameworkContentElement.Parent as UIElement;
+            }
 
-          this.VisualSourceItem = item;
-        } else {
-          this.SourceCollection = itemsControl.ItemsSource ?? itemsControl.Items;
+            if (sender is ItemsControl itemsControl)
+            {
+                this.SourceGroup = itemsControl.FindGroup(this.DragStartPosition);
+                this.VisualSourceFlowDirection = itemsControl.GetItemsPanelFlowDirection();
+
+                UIElement item = null;
+                if (sourceElement != null)
+                {
+                    item = itemsControl.GetItemContainer(sourceElement);
+                }
+
+                if (item == null)
+                {
+                    var itemPosition = this.DragStartPosition;
+
+                    if (DragDrop.GetDragDirectlySelectedOnly(this.VisualSource))
+                    {
+                        item = itemsControl.GetItemContainerAt(itemPosition);
+                    }
+                    else
+                    {
+                        item = itemsControl.GetItemContainerAt(itemPosition, itemsControl.GetItemsPanelOrientation());
+
+                        if (item.IsDragSourceIgnored())
+                        {
+                            item = null;
+                        }
+                    }
+                }
+
+                if (item != null)
+                {
+                    // Remember the relative position of the item being dragged
+                    this.PositionInDraggedItem = getPosition(item);
+
+                    var itemParent = ItemsControl.ItemsControlFromItemContainer(item);
+
+                    if (itemParent != null)
+                    {
+                        this.SourceCollection = itemParent.ItemsSource ?? itemParent.Items;
+                        if (itemParent != itemsControl)
+                        {
+                            if (item is TreeViewItem tvItem)
+                            {
+                                var tv = tvItem.GetVisualAncestor<TreeView>();
+                                if (tv != null && tv != itemsControl && !tv.IsDragSource())
+                                {
+                                    return;
+                                }
+                            }
+                            else if (itemsControl.ItemContainerGenerator.IndexFromContainer(itemParent) < 0 && !itemParent.IsDragSource())
+                            {
+                                return;
+                            }
+                        }
+
+                        this.SourceIndex = itemParent.ItemContainerGenerator.IndexFromContainer(item);
+                        this.SourceItem = itemParent.ItemContainerGenerator.ItemFromContainer(item);
+                    }
+                    else
+                    {
+                        this.SourceIndex = -1;
+                    }
+
+                    var selectedItems = itemsControl.GetSelectedItems().OfType<object>().Where(i => i != CollectionView.NewItemPlaceholder).ToList();
+                    this.SourceItems = selectedItems;
+
+                    // Some controls (I'm looking at you TreeView!) haven't updated their
+                    // SelectedItem by this point. Check to see if there 1 or less item in 
+                    // the SourceItems collection, and if so, override the control's SelectedItems with the clicked item.
+                    //
+                    // The control has still the old selected items at the mouse down event, so we should check this and give only the real selected item to the user.
+                    if (selectedItems.Count <= 1 || this.SourceItem != null && !selectedItems.Contains(this.SourceItem))
+                    {
+                        this.SourceItems = Enumerable.Repeat(this.SourceItem, 1);
+                    }
+
+                    this.VisualSourceItem = item;
+                }
+                else
+                {
+                    this.SourceCollection = itemsControl.ItemsSource ?? itemsControl.Items;
+                }
+            }
+            else
+            {
+                this.SourceItem = (sourceElement as FrameworkElement)?.DataContext ?? (sender as FrameworkElement)?.DataContext;
+                if (this.SourceItem != null)
+                {
+                    this.SourceItems = Enumerable.Repeat(this.SourceItem, 1);
+                }
+
+                this.VisualSourceItem = sourceElement;
+                this.PositionInDraggedItem = sourceElement != null ? getPosition(sourceElement) : this.DragStartPosition;
+            }
+
+            this.SourceItems ??= Enumerable.Empty<object>();
         }
-      } else {
-        if (sender is UIElement) {
-          this.PositionInDraggedItem = e.GetPosition((UIElement)sender);
-        }
-      }
 
-      if (this.SourceItems == null) {
-        this.SourceItems = Enumerable.Empty<object>();
-      }
+        internal void RefreshSelectedItems(object sender)
+        {
+            if (sender is not ItemsControl itemsControl)
+            {
+                return;
+            }
+
+            var selectedItems = itemsControl.GetSelectedItems().OfType<object>().Where(i => i != CollectionView.NewItemPlaceholder).ToList();
+            this.SourceItems = selectedItems;
+
+            // Some controls (I'm looking at you TreeView!) haven't updated their
+            // SelectedItem by this point. Check to see if there 1 or less item in 
+            // the SourceItems collection, and if so, override the control's SelectedItems with the clicked item.
+            //
+            // The control has still the old selected items at the mouse down event, so we should check this and give only the real selected item to the user.
+            if (selectedItems.Count <= 1 || this.SourceItem != null && !selectedItems.Contains(this.SourceItem))
+            {
+                this.SourceItems = Enumerable.Repeat(this.SourceItem, 1);
+            }
+        }
     }
-
-    /// <summary>
-    /// Gets or sets the drag data.
-    /// </summary>
-    /// 
-    /// <remarks>
-    /// This must be set by a drag handler in order for a drag to start.
-    /// </remarks>
-    public object Data { get; set; }
-
-    /// <summary>
-    /// Gets the position of the click that initiated the drag, relative to <see cref="VisualSource"/>.
-    /// </summary>
-    public Point DragStartPosition { get; private set; }
-
-    /// <summary>
-    /// Gets the point where the cursor was relative to the item being dragged when the drag was started.
-    /// </summary>
-    public Point PositionInDraggedItem { get; private set; }
-
-    /// <summary>
-    /// Gets or sets the allowed effects for the drag.
-    /// </summary>
-    /// 
-    /// <remarks>
-    /// This must be set to a value other than <see cref="DragDropEffects.None"/> by a drag handler in order 
-    /// for a drag to start.
-    /// </remarks>
-    public DragDropEffects Effects { get; set; }
-
-    /// <summary>
-    /// Gets the mouse button that initiated the drag.
-    /// </summary>
-    public MouseButton MouseButton { get; private set; }
-
-    /// <summary>
-    /// Gets the collection that the source ItemsControl is bound to.
-    /// </summary>
-    /// 
-    /// <remarks>
-    /// If the control that initated the drag is unbound or not an ItemsControl, this will be null.
-    /// </remarks>
-    public IEnumerable SourceCollection { get; private set; }
-
-    /// <summary>
-    /// Gets the position from where the item was dragged.
-    /// </summary>
-    /// <value>The index of the source.</value>
-    public int SourceIndex { get; private set; }
-
-    /// <summary>
-    /// Gets the object that a dragged item is bound to.
-    /// </summary>
-    /// 
-    /// <remarks>
-    /// If the control that initated the drag is unbound or not an ItemsControl, this will be null.
-    /// </remarks>
-    public object SourceItem { get; private set; }
-
-    /// <summary>
-    /// Gets a collection of objects that the selected items in an ItemsControl are bound to.
-    /// </summary>
-    /// 
-    /// <remarks>
-    /// If the control that initated the drag is unbound or not an ItemsControl, this will be empty.
-    /// </remarks>
-    public IEnumerable SourceItems { get; private set; }
-
-    /// <summary>
-    /// Gets the group from a dragged item if the drag is currently from an ItemsControl with groups.
-    /// </summary>
-    public CollectionViewGroup SourceGroup { get; private set; }
-
-    /// <summary>
-    /// Gets the control that initiated the drag.
-    /// </summary>
-    public UIElement VisualSource { get; private set; }
-
-    /// <summary>
-    /// Gets the item in an ItemsControl that started the drag.
-    /// </summary>
-    /// 
-    /// <remarks>
-    /// If the control that initiated the drag is an ItemsControl, this property will hold the item
-    /// container of the clicked item. For example, if <see cref="VisualSource"/> is a ListBox this
-    /// will hold a ListBoxItem.
-    /// </remarks>
-    public UIElement VisualSourceItem { get; private set; }
-
-    /// <summary>
-    /// Gets the FlowDirection of the current drag source.
-    /// </summary>
-    public FlowDirection VisualSourceFlowDirection { get; private set; }
-
-    /// <summary>
-    /// Gets the <see cref="IDataObject"/> which is used by the drag and drop operation. Set it to
-    /// a custom instance if custom drag and drop behavior is needed.
-    /// </summary>
-    public IDataObject DataObject { get; set; }
-
-    /// <summary>
-    /// Gets the drag drop copy key state indicating the effect of the drag drop operation.
-    /// </summary>
-    public DragDropKeyStates DragDropCopyKeyState { get; private set; }
-  }
 }
